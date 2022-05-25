@@ -48,6 +48,7 @@ def parse_arguments():
     parser.add_argument('-nc', '--noOfCandidates', type=int, const=1, nargs='?',\
         help='Maximum no of candidates to save. ', required=False)
     return parser.parse_args()
+
 def googleAuth():
     gauth = GoogleAuth()
         # Try to load saved client credentials
@@ -67,14 +68,14 @@ def googleAuth():
     # Save the current credentials to a file
     gauth.SaveCredentialsFile("mycreds.txt")
     return gauth
-def login(jobId,username,password):
+
+def login(username,password):
     """
     This code block will help in logging in to Instahyre.
     """
     try:
-        url = "https://www.instahyre.com/employer/candidates/" + jobId +"/0/"
-        companyInfoUrl = "https://app.pragti.in/api/employer/applicants/get_company_info"
         driver = webdriver.Chrome(ChromeDriverManager().install())
+        url = "https://www.instahyre.com/employer/candidates/"
         driver.get(url)
         driver.implicitly_wait(15)
         loginBox = driver.find_element(by=By.XPATH, value='//*[@id ="email"]')
@@ -87,10 +88,15 @@ def login(jobId,username,password):
     except Exception as exc:
         logging.info("Login Unsuucessful .\n Exception Raised : \n", exc)
         logging.info("Full Traceback for debugging: \n", traceback.format_exc())
-def saveForReview(driver, noOfCandidates):
+
+def saveForReview(driver, jobId, noOfCandidates):
     """
     This code block will help in saving the candidates for review in Instahyre.
     """
+    time.sleep(5)
+    url = "https://www.instahyre.com/employer/candidates/" + jobId +"/0/"
+    driver.get(url)
+    time.sleep(5)
     companyNamesWithProductMatch = []
     companyNamesWithNoMatch = []
     companyNamesWithServiceMatch = []
@@ -108,7 +114,11 @@ def saveForReview(driver, noOfCandidates):
                         companyName = companyName.split(" at ")[1].strip()
                         parms = {"company_name" : companyName, "api_key" : "9874"}
                         response = requests.post("https://app.pragti.in/api/employer/applicants/get_company_info", data = parms)
-                        companyType = response.json().get('data').get('type')
+                        if response.status_code == 200:
+                            companyType = response.json().get('data').get('type')
+                        else:
+                            companyType = " "
+                            logging.info("Couldn't get information from the company database.")
                         if companyType == "product":
                             companyNamesWithProductMatch.append(companyName)
                             saveForReviewButton = candidate.find_elements(By.CLASS_NAME,"button-hide-save")[0]
@@ -148,6 +158,7 @@ def downloadResume(driver, jobId):
     try:
         url = "https://www.instahyre.com/employer/candidates/" + jobId +"/3/"
         driver.get(url)
+        time.sleep(5)
         selectAll = driver.find_elements(By.CLASS_NAME, "button-select-all")[0]
         driver.execute_script("arguments[0].click();", selectAll)
         downloadButton = driver.find_elements(By.CLASS_NAME, "button-bulk-download-resume")[0]
@@ -156,12 +167,12 @@ def downloadResume(driver, jobId):
         driver.execute_script("arguments[0].click();",zipFileButton)
         excelButton = driver.find_elements(By.ID, "download-excel")[0]
         driver.execute_script("arguments[0].click();",excelButton)
-        #time.sleep(5)
         downloadResume = driver.find_elements(By.CLASS_NAME, "download-resume-action")[0]
         downloadButton = downloadResume.find_elements(By.CLASS_NAME, "btn-success")[0]
         driver.execute_script("arguments[0].click();",downloadButton)
     except Exception as exc:
         logging.info("Method downloadResume failed . Error : \n {}".format(exc))
+
 def uploadResumeToGoogleDrive(path):
     """
     This code block will help in uploading the candidates resume to google drive.
@@ -279,22 +290,21 @@ if __name__ == '__main__':
                                 range=SAMPLE_RANGE_NAME).execute()
     values_input = result_input.get('values', [])
     required_data = values_input[1:]
-    for data in required_data:
-        username="tanmay@pragti.in"
-        password="pragti@432"
-        jobId = data[0]
-        noOfCandidates = int(data[1])
-        driver = ''
-        try:
-            driver = login(jobId=jobId,username=username,password=password)
-            saveForReview(driver=driver, noOfCandidates=noOfCandidates)
+    username="tanmay@pragti.in"
+    password="pragti@432"
+    driver = ''
+    driver = login(username=username,password=password)
+    try:
+        for data in required_data:
+            jobId = data[0]
+            noOfCandidates = int(data[1])
+            saveForReview(driver=driver, jobId=jobId, noOfCandidates=noOfCandidates)
             if driver:
-                time.sleep(10)
                 downloadResume(driver=driver,jobId=jobId)
+                time.sleep(10)
                 uploadCandidateToDatabase()
-                time.sleeep(20)
-        except Exception as exc:
-            logging.info("Execution Failed . Error : \n {}".format(exc))
-        finally:
-            if driver:
-                driver.quit()
+    except Exception as exc:
+        logging.info("Execution Failed for. Error : \n {}".format(exc))
+    finally:
+        if driver:
+            driver.quit()
