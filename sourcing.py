@@ -20,6 +20,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support import expected_conditions as EC
+
 RESUME_LINKS = {}
 TAG_FILE = datetime.datetime.now().isoformat()
 TAG_DIR = datetime.datetime.now().date().isoformat()
@@ -27,11 +28,14 @@ LOG_FILE_NAME = "{}{}LOG_{}.txt"
 LOG_PATH = os.getcwd()+os.sep+TAG_DIR
 if not os.path.exists(LOG_PATH):
     os.makedirs(LOG_PATH)
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 logging.basicConfig(filename=LOG_FILE_NAME.format(LOG_PATH, os.sep, TAG_FILE),
                     format='%(asctime)s - %(message)s',
                     filemode='w')
 logger = logging.getLogger()
 logger.setLevel(logging.NOTSET)
+
 def parse_arguments():
     parser = ArgumentParser(description='\n',
     usage='''
@@ -86,8 +90,8 @@ def login(username,password):
         loginButton.click()
         return driver
     except Exception as exc:
-        logging.info("Login Unsuucessful .\n Exception Raised : \n", exc)
-        logging.info("Full Traceback for debugging: \n", traceback.format_exc())
+        logger.info("Login Unsuucessful .\n Exception Raised : \n", exc)
+        logger.info("Full Traceback for debugging: \n", traceback.format_exc())
 
 def saveForReview(driver, jobId, noOfCandidates):
     """
@@ -118,7 +122,7 @@ def saveForReview(driver, jobId, noOfCandidates):
                             companyType = response.json().get('data').get('type')
                         else:
                             companyType = " "
-                            logging.info("Couldn't get information from the company database.")
+                            logger.info("Couldn't get information from the company database.")
                         if companyType == "product":
                             companyNamesWithProductMatch.append(companyName)
                             saveForReviewButton = candidate.find_elements(By.CLASS_NAME,"button-hide-save")[0]
@@ -133,7 +137,7 @@ def saveForReview(driver, jobId, noOfCandidates):
                     else:
                         continue
                 else:
-                    print("Couldn't find company name")
+                    logger.info("Couldn't find company name")
             if refreshPage:
                 continue
             paginationButton = driver.find_elements(By.CLASS_NAME, "pagination")[0]
@@ -145,12 +149,13 @@ def saveForReview(driver, jobId, noOfCandidates):
                 break
             if tag.is_enabled():
                 driver.execute_script("arguments[0].click();", tag)
-        logging.info("Company Names with product Match : \n {}".format(companyNamesWithProductMatch))
-        logging.info("Company Names no product Match : \n {}".format(companyNamesWithNoMatch))
-        logging.info("Company Names no service Match : \n {}".format(companyNamesWithServiceMatch))
+        logger.info("Company Names with product Match : \n {}".format(companyNamesWithProductMatch))
+        logger.info("Company Names no product Match : \n {}".format(companyNamesWithNoMatch))
+        logger.info("Company Names no service Match : \n {}".format(companyNamesWithServiceMatch))
     except Exception as exc:
-        logging.info("Excepton raised during execution ", exc)
-        logging.info("Full Traceback for debugging: \n", traceback.format_exc())
+        logger.info("Excepton raised during execution ", exc)
+        logger.info("Full Traceback for debugging: \n", traceback.format_exc())
+
 def downloadResume(driver, jobId):
     """
     This code block will help in downloding the candidates resume from instahyre.
@@ -171,7 +176,7 @@ def downloadResume(driver, jobId):
         downloadButton = downloadResume.find_elements(By.CLASS_NAME, "btn-success")[0]
         driver.execute_script("arguments[0].click();",downloadButton)
     except Exception as exc:
-        logging.info("Method downloadResume failed . Error : \n {}".format(exc))
+        logger.info("Method downloadResume failed . Error : \n {}".format(exc))
 
 def uploadResumeToGoogleDrive(path):
     """
@@ -191,8 +196,9 @@ def uploadResumeToGoogleDrive(path):
         for files in uploadedFiles:
             RESUME_LINKS[files["title"]] = files["alternateLink"]
     except Exception as exc:
-        logging.info("Method uploadResumeToGoogleDrive failed . Error : \n {}".format(exc))
-        logging.info("Full Traceback for debugging: \n", traceback.format_exc())
+        logger.info("Method uploadResumeToGoogleDrive failed . Error : \n {}".format(exc))
+        logger.info("Full Traceback for debugging: \n", traceback.format_exc())
+
 def uploadCandidateToDatabase():
     """
     This code block will help in uploading the candidates details to the database.
@@ -235,7 +241,7 @@ def uploadCandidateToDatabase():
                 candidate["current_company"] = jd_data.data[0].get("id")
             else:
                 candidate["current_company"] = None
-                logging.info("Could not find company {} in database".format(row.Current_Employer))
+                logger.info("Could not find company {} in database".format(row.Current_Employer))
             candidate["skill"] = row.Key_Skills
             candidate["name"] = row.Candidate_Name
             candidate["mobile"] = row.Phone_Number
@@ -265,18 +271,19 @@ def uploadCandidateToDatabase():
             candidate["job_prefer_type"] = None
             candidate["min_expected_ctc"] = None
             listOfCandidates.append(candidate)
-        logging.info("Adding all tthe beelow candidates to the database : \n {}".format(listOfCandidates))
+        logger.info("Adding all tthe beelow candidates to the database : \n {}".format(listOfCandidates))
         print("Adding all tthe beelow candidates to the database : \n {}".format(listOfCandidates))
         url = 'https://ocsuosnatmmlnkxgybgh.supabase.co/rest/v1/candidates'
         headers = {'Content-Type': 'application/json','apikey':api_key}
         response = requests.post(url,headers=headers,json=listOfCandidates)
         if response.status_code == 201:
-            logging.info("Successfully added candidates to the database")
+            logger.info("Successfully added candidates to the database")
         else:
-            logging.info("Could not add candidate details in database . Error : \n {}".format(response.json()))
+            logger.info("Could not add candidate details in database . Error : \n {}".format(response.json()))
     except Exception as exc:
-        logging.info("Method uploadCandidateToDatabase failed . Error : \n {}".format(exc))
-        logging.info("Full Traceback for debugging: \n", traceback.format_exc())
+        logger.info("Method uploadCandidateToDatabase failed . Error : \n {}".format(exc))
+        logger.info("Full Traceback for debugging: \n", traceback.format_exc())
+
 if __name__ == '__main__':
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
     # here enter the id of your google sheet
@@ -304,7 +311,7 @@ if __name__ == '__main__':
                 time.sleep(10)
                 uploadCandidateToDatabase()
     except Exception as exc:
-        logging.info("Execution Failed for. Error : \n {}".format(exc))
+        logger.info("Execution Failed for. Error : \n {}".format(exc))
     finally:
         if driver:
             driver.quit()
