@@ -305,6 +305,9 @@ if __name__ == '__main__':
         for data in required_data:
             jobId = data[0]
             noOfCandidates = int(data[1])
+            logger.info("*********************************************************************************************")
+            logger.info("Starting to execute Job Id {}".format(jobId))
+            logger.info("*********************************************************************************************")
             saveForReview(driver=driver, jobId=jobId, noOfCandidates=noOfCandidates)
             if driver:
                 downloadResume(driver=driver,jobId=jobId)
