@@ -140,15 +140,19 @@ def saveForReview(driver, jobId, noOfCandidates):
                     logger.info("Couldn't find company name")
             if refreshPage:
                 continue
-            paginationButton = driver.find_elements(By.CLASS_NAME, "pagination")[0]
-            tags = paginationButton.find_elements(By.TAG_NAME, "li")
-            tag = [tag for tag in tags if tag.text == "Next »"]
-            if tag:
-                tag = tag[0]
+            paginationButton = driver.find_elements(By.CLASS_NAME, "pagination")
+            if paginationButton:
+                tags = paginationButton[0].find_elements(By.TAG_NAME, "li")
+                tag = [tag for tag in tags if tag.text == "Next »"]
+                if tag:
+                    tag = tag[0]
+                else:
+                    break
+                if tag.is_enabled():
+                    driver.execute_script("arguments[0].click();", tag)
             else:
+                logger.info("*********************Could only Found {} candidates*********************".format(i))
                 break
-            if tag.is_enabled():
-                driver.execute_script("arguments[0].click();", tag)
         logger.info("Company Names with product Match : \n {}".format(companyNamesWithProductMatch))
         logger.info("Company Names no product Match : \n {}".format(companyNamesWithNoMatch))
         logger.info("Company Names no service Match : \n {}".format(companyNamesWithServiceMatch))
