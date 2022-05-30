@@ -161,20 +161,38 @@ def downloadResume(driver, jobId):
     This code block will help in downloding the candidates resume from instahyre.
     """
     try:
+        time.sleep(5)
         url = "https://www.instahyre.com/employer/candidates/" + jobId +"/3/"
         driver.get(url)
         time.sleep(5)
-        selectAll = driver.find_elements(By.CLASS_NAME, "button-select-all")[0]
-        driver.execute_script("arguments[0].click();", selectAll)
-        downloadButton = driver.find_elements(By.CLASS_NAME, "button-bulk-download-resume")[0]
-        driver.execute_script("arguments[0].click();", downloadButton)
-        zipFileButton = driver.find_elements(By.ID, "download-zip")[0]
-        driver.execute_script("arguments[0].click();",zipFileButton)
-        excelButton = driver.find_elements(By.ID, "download-excel")[0]
-        driver.execute_script("arguments[0].click();",excelButton)
-        downloadResume = driver.find_elements(By.CLASS_NAME, "download-resume-action")[0]
-        downloadButton = downloadResume.find_elements(By.CLASS_NAME, "btn-success")[0]
-        driver.execute_script("arguments[0].click();",downloadButton)
+        selectedCandidates = 0
+        result = driver.find_elements(By.CLASS_NAME, "employer-applications")
+        candidates = WebDriverWait(result[0], 100).until(EC.presence_of_all_elements_located((By.XPATH, "//*[@ng-repeat='candidate in candidates']")))
+        for candidate in candidates:
+            checkboxSelected = candidate.find_elements(By.CLASS_NAME, "fa-check-circle")
+            if checkboxSelected:
+                data = checkboxSelected[0].get_attribute("data-html")
+                if data != "true":
+                    candidate.find_elements(By.CLASS_NAME, "ng-pristine")[0].click()
+                    selectedCandidates += 1
+            else:
+                candidate.find_elements(By.CLASS_NAME, "ng-pristine")[0].click()
+                selectedCandidates += 1
+
+        if selectedCandidates > 0:
+            downloadButton = driver.find_elements(By.CLASS_NAME, "button-bulk-download-resume")[0]
+            driver.execute_script("arguments[0].click();", downloadButton)
+            zipFileButton = driver.find_elements(By.ID, "download-zip")[0]
+            driver.execute_script("arguments[0].click();",zipFileButton)
+            excelButton = driver.find_elements(By.ID, "download-excel")[0]
+            driver.execute_script("arguments[0].click();",excelButton)
+            downloadResume = driver.find_elements(By.CLASS_NAME, "download-resume-action")[0]
+            downloadButton = downloadResume.find_elements(By.CLASS_NAME, "btn-success")[0]
+            driver.execute_script("arguments[0].click();",downloadButton)
+            return True
+        else:
+            logger.info("No canddiates to download resume ")
+            return False
     except Exception as exc:
         logger.info("Method downloadResume failed . Error : \n {}".format(exc))
 
@@ -284,6 +302,20 @@ def uploadCandidateToDatabase():
         logger.info("Method uploadCandidateToDatabase failed . Error : \n {}".format(exc))
         logger.info("Full Traceback for debugging: \n", traceback.format_exc())
 
+def slackNotification(filename, filepath):
+    my_file={'file':open(filepath, 'rb')}
+    channel = "sourcing-alerts"
+    token = "xoxb-1645315758097-3573159057125-shnhyhuw7l9i1FogwrOwi3wQ"
+    payload={
+        "filename": filename, 
+        "initial_comment": "Instahyre sourcing details.",
+        "token":token, 
+        "channels":[channel],
+        }
+    response=requests.post("https://slack.com/api/files.upload", params=payload, files=my_file)
+    if response.status_code != 200:
+        logger.info("Could not share log files in slack. Error: \n", respose.json())
+
 if __name__ == '__main__':
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
     # here enter the id of your google sheet
@@ -301,20 +333,28 @@ if __name__ == '__main__':
     password="pragti@432"
     driver = ''
     driver = login(username=username,password=password)
+    JobIds = []
     try:
         for data in required_data:
             jobId = data[0]
+            JobIds.append(jobId)
             noOfCandidates = int(data[1])
             logger.info("*********************************************************************************************")
             logger.info("Starting to execute Job Id {}".format(jobId))
             logger.info("*********************************************************************************************")
             saveForReview(driver=driver, jobId=jobId, noOfCandidates=noOfCandidates)
             if driver:
-                downloadResume(driver=driver,jobId=jobId)
-                time.sleep(10)
-                uploadCandidateToDatabase()
+                returnResult = downloadResume(driver=driver,jobId=jobId)
+                if returnResult:
+                    time.sleep(10)
+                    uploadCandidateToDatabase()
+                else:
+                    logger.info("No candidates downloaded.")
+        LOG_FILE_NAME.format(LOG_PATH, os.sep, TAG_FILE)
     except Exception as exc:
         logger.info("Execution Failed for. Error : \n {}".format(exc))
     finally:
+        filename = "IntsaHyreSourcing_{}".format(JobIds)
+        slackNotification(filename=filename, filepath=LOG_FILE_NAME.format(LOG_PATH, os.sep, TAG_FILE))
         if driver:
             driver.quit()
